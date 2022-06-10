@@ -1,0 +1,6 @@
+"name","type","length","leftDigits","rightDigits"
+"ID","INTEGER","4","4","0"
+"Name","STRING","33","0","0"
+"CountryCode","STRING","3","0","0"
+"District","STRING","20","0","0"
+"Population","INTEGER","8","8","0"

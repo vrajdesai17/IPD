@@ -1,0 +1,5 @@
+"name","type","length","leftDigits","rightDigits"
+"CountryCode","STRING","3","0","0"
+"Language","STRING","25","0","0"
+"IsOfficial","STRING","1","0","0"
+"Percentage","DECIMAL","5","3","1"
