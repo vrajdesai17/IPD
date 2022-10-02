@@ -12,7 +12,7 @@ LETS explore.
 
 # Add all your application here
 app.add_app("Home", app3.app)
-app.add_app("Data", app2.app)
+app.add_app("AutoML of regression and classification models", app2.app)
 app.add_app("Model", app1.app)
 # The main app
 app.run()
