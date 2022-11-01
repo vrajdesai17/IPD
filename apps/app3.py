@@ -17,18 +17,22 @@ def app():
     st.title("ML Dataset Explorer")
     st.subheader("Simple Data Science Explorer with Streamlit")
     
-    def file_selector(folder_path='./apps/datasets'): # current
-        filenames=os.listdir(folder_path)
-        selected_filename = st.selectbox("Select A file",filenames)
-        return os.path.join(folder_path,selected_filename)
+    with st.sidebar.header('1. Upload your CSV data'):
+        uploaded_file = st.sidebar.file_uploader("Upload your input CSV file", type=["csv"])
+    # def file_selector(folder_path='./apps/datasets'): # current
+    #     filenames=os.listdir(folder_path)
+    #     selected_filename = st.selectbox("Select A file",filenames)
+    #     return os.path.join(folder_path,selected_filename)
    
-    filename = file_selector()
+    filename = uploaded_file
     st.info("You Selected {}".format(filename))
   
     # Read Data
-    df = pd.read_csv(filename)
-   
-
+    if uploaded_file is not None:
+        df = pd.read_csv(filename)
+        st.markdown("Glimpse of dataset")
+    else:
+        st.write("Awaiting")
 
     # Show Dataset
     if st.checkbox("Show Dataset"):

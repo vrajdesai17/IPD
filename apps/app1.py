@@ -1,114 +1,273 @@
-import streamlit as st 
-import numpy as np 
-
-import matplotlib.pyplot as plt
-from sklearn import datasets
+# Libraries
+import streamlit as st
+import pandas as pd
+import lazypredict
+from lazypredict.Supervised import LazyClassifier
+from lazypredict.Supervised import LazyRegressor
 from sklearn.model_selection import train_test_split
-
-from sklearn.decomposition import PCA
-from sklearn.svm import SVC
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.ensemble import RandomForestClassifier
-
-from sklearn.metrics import accuracy_score
-
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_squared_error, r2_score
+import matplotlib.pyplot as plt
+import seaborn as sns
+import base64
+import io
+import numpy as np
+from streamlit_option_menu import option_menu
+import streamlit.components.v1 as components
 def app():
-    st.title('Machine Learning')
+    # Page expands to full width
+    # st.set_page_config(page_title='Auto Ml Regression and Classification App',layout='wide')
 
-    st.write("""
-    # Explore different classifier and datasets
-    Which one is the best?
+    tab1,tab2 = st.tabs(["Existing dataset","Current dataset"])
+    with tab1:
+        def build_model(df):
+            X = df.iloc[:,:-1] # Features variables
+            Y = df.iloc[:,-1]  # Target variable
+
+            # Dimensions of dataset
+            st.markdown('**1.2. Dataset dimension**')
+            st.write('X')
+            st.info(X.shape)
+            st.write('Y')
+            st.info(Y.shape)
+
+            # Variable details
+            st.markdown('**1.3. Variable details**:')
+            st.write('X variable (first 20 are shown)')
+            st.info(list(X.columns[:20]))
+            st.write('Y variable')
+            st.info(Y.name)
+
+            # Building lazy model
+            X_train, X_test, Y_train, Y_test = train_test_split(X, Y,test_size = split_size,random_state = seed_number)
+            # reg = LazyRegressor(verbose=0,ignore_warnings=False, custom_metric=None)
+            clf = LazyClassifier( verbose=0, ignore_warnings=True, custom_metric=None)
+            models,predictions = clf.fit(X_train, X_test, Y_train, Y_test)
+            # verbose is the choice that how you want to see the output of your algorithm while it's training
+            models_train,predictions_train = clf.fit(X_train, X_train, Y_train, Y_train)
+            models_test,predictions_test = clf.fit(X_train, X_test, Y_train, Y_test)
+            
+            st.subheader('2. Table of Model Performance')
+
+            st.write('Training set')
+            st.write(predictions_train)
+            st.markdown(filedownload(predictions_train,'training.csv'), unsafe_allow_html=True)
+
+            st.write('Test set')
+            st.write(predictions_test)
+            st.markdown(filedownload(predictions_test,'test.csv'), unsafe_allow_html=True)
+
+            st.subheader('3. Plot of Model Performance (Test set)')
+
+            #Accuracy
+            with st.markdown('**Accuracy**'):
+                # Tall
+                predictions_test["Accuracy"] = [0 if i < 0 else i for i in predictions_test["Accuracy"] ]
+                # if value(i) is less than 0 i.e R-squared predicted value of test set is 0 , it will return 0
+                # else it will return the R-squared value predicted
+                plt.figure(figsize=(3, 9))
+                sns.set_theme(style="whitegrid")
+                ax1 = sns.barplot(y=predictions_test.index, x="Accuracy", data=predictions_test)
+                ax1.set(xlim=(0, 1))
+                # xlim is basically the x axis value sepration range
+            st.markdown(imagedownload(plt,'plot-r2-tall.pdf'), unsafe_allow_html=True)
+                # Wide
+            plt.figure(figsize=(9, 3))
+            sns.set_theme(style="whitegrid")
+            ax1 = sns.barplot(x=predictions_test.index, y="Accuracy", data=predictions_test)
+            ax1.set(ylim=(0, 1))
+            # y axis plot download
+            plt.xticks(rotation=90)
+            st.pyplot(plt)
+            st.markdown(imagedownload(plt,'plot-r2-wide.pdf'), unsafe_allow_html=True)
+
+            # Calculation plot
+            with st.markdown('**Calculation time**'):
+                # Tall
+                predictions_test["Time Taken"] = [0 if i < 0 else i for i in predictions_test["Time Taken"] ]
+                plt.figure(figsize=(3, 9))
+                sns.set_theme(style="whitegrid")
+                ax3 = sns.barplot(y=predictions_test.index, x="Time Taken", data=predictions_test)
+            st.markdown(imagedownload(plt,'plot-calculation-time-tall.pdf'), unsafe_allow_html=True)
+                # Wide
+            plt.figure(figsize=(9, 3))
+            sns.set_theme(style="whitegrid")
+            ax3 = sns.barplot(x=predictions_test.index, y="Time Taken", data=predictions_test)
+            plt.xticks(rotation=90)
+            st.pyplot(plt)
+            st.markdown(imagedownload(plt,'plot-calculation-time-wide.pdf'), unsafe_allow_html=True)
+
+        def filedownload(df, filename):
+            csv = df.to_csv(index=False)
+            b64 = base64.b64encode(csv.encode()).decode()  # strings <-> bytes conversions
+            href = f'<a href="data:file/csv;base64,{b64}" download={filename}>Download {filename} File</a>'
+            return href
+
+        def imagedownload(plt, filename):
+            s = io.BytesIO()
+            plt.savefig(s, format='pdf', bbox_inches='tight')
+            plt.close()
+            b64 = base64.b64encode(s.getvalue()).decode()  # strings <-> bytes conversions
+            href = f'<a href="data:image/png;base64,{b64}" download={filename}>Download {filename} File</a>'
+            return href
+
+        st.write("""
+        # Auto Ml Regression and Classification App 
+        """)
+
+        # Sidebar - Collects user input features into dataframe
+        with st.sidebar.header('1. Upload your CSV data'):
+            uploaded_file = st.sidebar.file_uploader(" do Upload your input CSV file", type=["csv"])
+            st.sidebar.markdown("""
+        [Example CSV input file](https://raw.githubusercontent.com/dataprofessor/data/master/delaney_solubility_with_descriptors.csv)
     """)
 
-    dataset_name = st.sidebar.selectbox(
-        'Select Dataset',
-        ('Iris', 'Breast Cancer', 'Wine')
-    )
+        # Sidebar - Specify parameter settings
+        with st.sidebar.header('2. Set Parameters'):
+            split_size = st.sidebar.slider('Data split ratio is(% for Training Set)', 10, 90, 80, 5)
+            seed_number = st.sidebar.slider('Set the random seed number', 1, 100, 43, 1)
 
-    st.write(f"## {dataset_name} Dataset")
 
-    classifier_name = st.sidebar.selectbox(
-        'Select classifier',
-        ('KNN', 'SVM', 'Random Forest')
-    )
+        # Main Panel
+    # Displays the dataset
+        st.subheader('1. Dataset')
 
-    def get_dataset(name):
-        data = None
-        if name == 'Iris':
-            data = datasets.load_iris()
-        elif name == 'Wine':
-            data = datasets.load_wine()
+        if uploaded_file is not None:
+            df = pd.read_csv(uploaded_file)
+            st.markdown('**1.1. Glimpse of dataset**')
+            st.write(df)
+            build_model(df)
         else:
-            data = datasets.load_breast_cancer()
-        X = data.data
-        y = data.target #  The distinguishing feature of the target array is that it is usually the quantity we want to predict from the data: in statistical terms, it is the dependent variable. For example, in the preceding data we may wish to construct a model that can predict the species of flower based on the other measurements; in this case, the species column would be considered the target array.
-        return X, y
+            st.info('Awaiting for CSV file to be uploaded.')
+     
+    # TAB 1 end 
 
-    X, y = get_dataset(dataset_name)
-    st.write('Shape of dataset:', X.shape)
-    st.write('number of classes:', len(np.unique(y)))
 
-    def add_parameter_ui(clf_name):
-        params = dict()
-        if clf_name == 'SVM':
-            C = st.sidebar.slider('C', 0.01, 10.0) # C parameter in SVM is Penalty parameter of the error term. You can consider it as the degree of correct classification that the algorithm has to meet or the degree of optimization the the SVM has to meet. 
-            params['C'] = C
-        elif clf_name == 'KNN':
-            K = st.sidebar.slider('K', 1, 15) # nearest neighbours
-            params['K'] = K
+
+
+
+
+
+
+
+    # TAB 2 start
+    with tab2:
+        def build_model(df):
+            X = df.iloc[:,:-1] # Features variables
+            Y = df.iloc[:,-1]  # Target variable
+
+            # Dimensions of dataset
+            st.markdown('**1.2. Dataset dimension**')
+            st.write('X')
+            st.info(X.shape)
+            st.write('Y')
+            st.info(Y.shape)
+
+            # Variable details
+            st.markdown('**1.3. Variable details**:')
+            st.write('X variable (first 20 are shown)')
+            st.info(list(X.columns[:20]))
+            st.write('Y variable')
+            st.info(Y.name)
+
+            # Building lazy model
+            X_train, X_test, Y_train, Y_test = train_test_split(X, Y,test_size = split_size,random_state = seed_number)
+            # reg = LazyRegressor(verbose=0,ignore_warnings=False, custom_metric=None)
+            clf = LazyClassifier( verbose=0, ignore_warnings=True, custom_metric=None)
+            models,predictions = clf.fit(X_train, X_test, Y_train, Y_test)
+            # verbose is the choice that how you want to see the output of your algorithm while it's training
+            models_train,predictions_train = clf.fit(X_train, X_train, Y_train, Y_train)
+            models_test,predictions_test = clf.fit(X_train, X_test, Y_train, Y_test)
+            
+            st.subheader('2. Table of Model Performance')
+
+            st.write('Training set')
+            st.write(predictions_train)
+            st.markdown(filedownload(predictions_train,'training.csv'), unsafe_allow_html=True)
+
+            st.write('Test set')
+            st.write(predictions_test)
+            st.markdown(filedownload(predictions_test,'test.csv'), unsafe_allow_html=True)
+
+            st.subheader('3. Plot of Model Performance (Test set)')
+
+            #Accuracy
+            with st.markdown('**Accuracy**'):
+                # Tall
+                predictions_test["Accuracy"] = [0 if i < 0 else i for i in predictions_test["Accuracy"] ]
+                # if value(i) is less than 0 i.e R-squared predicted value of test set is 0 , it will return 0
+                # else it will return the R-squared value predicted
+                plt.figure(figsize=(3, 9))
+                sns.set_theme(style="whitegrid")
+                ax1 = sns.barplot(y=predictions_test.index, x="Accuracy", data=predictions_test)
+                ax1.set(xlim=(0, 1))
+                # xlim is basically the x axis value sepration range
+            st.markdown(imagedownload(plt,'plot-r2-tall.pdf'), unsafe_allow_html=True)
+                # Wide
+            plt.figure(figsize=(9, 3))
+            sns.set_theme(style="whitegrid")
+            ax1 = sns.barplot(x=predictions_test.index, y="Accuracy", data=predictions_test)
+            ax1.set(ylim=(0, 1))
+            # y axis plot download
+            plt.xticks(rotation=90)
+            st.pyplot(plt)
+            st.markdown(imagedownload(plt,'plot-r2-wide.pdf'), unsafe_allow_html=True)
+
+            # Calculation plot
+            with st.markdown('**Calculation time**'):
+                # Tall
+                predictions_test["Time Taken"] = [0 if i < 0 else i for i in predictions_test["Time Taken"] ]
+                plt.figure(figsize=(3, 9))
+                sns.set_theme(style="whitegrid")
+                ax3 = sns.barplot(y=predictions_test.index, x="Time Taken", data=predictions_test)
+            st.markdown(imagedownload(plt,'plot-calculation-time-tall.pdf'), unsafe_allow_html=True)
+                # Wide
+            plt.figure(figsize=(9, 3))
+            sns.set_theme(style="whitegrid")
+            ax3 = sns.barplot(x=predictions_test.index, y="Time Taken", data=predictions_test)
+            plt.xticks(rotation=90)
+            st.pyplot(plt)
+            st.markdown(imagedownload(plt,'plot-calculation-time-wide.pdf'), unsafe_allow_html=True)
+
+        def filedownload(df, filename):
+            csv = df.to_csv(index=False)
+            b64 = base64.b64encode(csv.encode()).decode()  # strings <-> bytes conversions
+            href = f'<a href="data:file/csv;base64,{b64}" download={filename}>Download {filename} File</a>'
+            return href
+
+        def imagedownload(plt, filename):
+            s = io.BytesIO()
+            plt.savefig(s, format='pdf', bbox_inches='tight')
+            plt.close()
+            b64 = base64.b64encode(s.getvalue()).decode()  # strings <-> bytes conversions
+            href = f'<a href="data:image/png;base64,{b64}" download={filename}>Download {filename} File</a>'
+            return href
+
+        st.write("""
+        # Auto Ml Regression and Classification App 
+        """)
+
+        # Sidebar - Collects user input features into dataframe
+        with st.sidebar.header('1. Upload your CSV data'):
+            uploaded_file = st.sidebar.file_uploader("Upload your input CSV file", type=["csv"])
+            st.sidebar.markdown("""
+        [Example CSV input file](https://raw.githubusercontent.com/dataprofessor/data/master/delaney_solubility_with_descriptors.csv)
+    """)
+
+        # Sidebar - Specify parameter settings
+        with st.sidebar.header('2. Set Parameters'):
+            split_size = st.sidebar.slider('Data split ratio (% for Training Set)', 10, 90, 80, 5)
+            seed_number = st.sidebar.slider('Set the random seed number', 1, 100, 42, 1)
+
+
+        # Main Panel
+    # Displays the dataset
+        st.subheader('1. Dataset')
+
+        if uploaded_file is not None:
+            df = pd.read_csv(uploaded_file)
+            st.markdown('**1.1. Glimpse of dataset**')
+            st.write(df)
+            build_model(df)
         else:
-            max_depth = st.sidebar.slider('max_depth', 2, 15)
-            params['max_depth'] = max_depth
-            n_estimators = st.sidebar.slider('n_estimators', 1, 100) #  This is the number of trees you want to build before taking the maximum voting or averages of predictions. 
-            params['n_estimators'] = n_estimators
-        return params
-
-    params = add_parameter_ui(classifier_name)
-
-    def get_classifier(clf_name, params):
-        clf = None
-        if clf_name == 'SVM':
-            clf = SVC(C=params['C'])
-        elif clf_name == 'KNN':
-            clf = KNeighborsClassifier(n_neighbors=params['K'])
-        else:
-            clf = clf = RandomForestClassifier(n_estimators=params['n_estimators'], 
-                max_depth=params['max_depth'], random_state=1234) # random_state simply sets a seed to the random generator, so that your train-test splits are always deterministic. If you don't set a seed, it is different each time.
-        return clf
-
-    clf = get_classifier(classifier_name, params)
-    #### CLASSIFICATION ####
-
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=1234) # train_test_split selects randomly the train and test size basing on the ratio given.
-
-    clf.fit(X_train, y_train)
-    y_pred = clf.predict(X_test)
-
-    acc = accuracy_score(y_test, y_pred)
-
-    st.write(f'Classifier = {classifier_name}')
-    st.write(f'Accuracy =', acc)
-
-    #### PLOT DATASET ####
-    # Project the data onto the 2 primary principal components
-    pca = PCA(2) # Principal Component Analysis is basically a statistical procedure to convert a set of observations of possibly correlated variables into a set of values of linearly uncorrelated variables
-    X_projected = pca.fit_transform(X)
-    # .fit() : perform the calculation on the feature values of input data and fit this calculation to the transformer.
-    # .transform(): For changing the data we probably do transform, in the transform() method, where we apply the calculations that we have calculated in fit() to every data point in feature F. 
-    # .fit_transform() : combination of fit and transform.
-    x1 = X_projected[:, 0]
-    x2 = X_projected[:, 1]
-
-    fig = plt.figure() # The plt is a common alias of matplotlib.
-    plt.scatter(x1, x2,
-            c=y, alpha=0.8,
-            cmap='viridis')
-    # alpha is the transparency of fig
-    # cmap is color map in matplotlib
-
-    plt.xlabel('Principal Component 1')
-    plt.ylabel('Principal Component 2')
-    plt.colorbar()
-
-    #plt.show()
-    st.pyplot(fig)
+            st.info('Awaiting for CSV file to be uploaded.')
